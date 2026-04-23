@@ -77,24 +77,23 @@ export default function RunPage() {
     if (animRef.current) cancelAnimationFrame(animRef.current)
     setRunning(false)
     
-    // Use a local constant to avoid any weirdness with kmRef during async
     const finalKm = kmRef.current
     const earned = Math.round(finalKm * 80)
     
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) throw new Error("Auth failed")
-
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("No authenticated user found")
+  
       // 1. Fetch current profile
       const { data: profile, error: fetchError } = await supabase
         .from('profiles')
         .select('points, total_km, total_sessions, streak, last_run_at')
         .eq('id', user.id)
         .single()
-
+  
       if (fetchError) throw fetchError
-
-      // --- STREAK LOGIC ---
+  
+      // --- STREAK & SESSION LOGIC ---
       const now = new Date()
       const lastRun = profile.last_run_at ? new Date(profile.last_run_at) : null
       let newStreak = profile.streak || 0
@@ -105,44 +104,45 @@ export default function RunPage() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
         const prevDay = new Date(lastRun.getFullYear(), lastRun.getMonth(), lastRun.getDate())
         const diffDays = Math.floor((today.getTime() - prevDay.getTime()) / (1000 * 60 * 60 * 24))
-
+  
         if (diffDays === 1) newStreak += 1
         else if (diffDays > 1) newStreak = 1
       }
-
-      // --- SESSION LOGIC ---
-      // Explicitly incrementing the existing count
+  
       const updatedSessions = (profile.total_sessions || 0) + 1
-
-      // 2. Update Profile - AWAIT THIS COMPLETION
+  
+      // 2. Perform the Update
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
           points: (profile.points || 0) + earned,
           total_km: parseFloat(((profile.total_km || 0) + finalKm).toFixed(2)),
-          total_sessions: updatedSessions, 
+          total_sessions: updatedSessions, // This is the increment
           streak: newStreak,
           last_run_at: now.toISOString()
         })
         .eq('id', user.id)
-
+  
       if (updateError) throw updateError
-
-      // 3. Record session log
-      await supabase.from('run_sessions').insert({
+  
+      // 3. Record individual session log
+      const { error: logError } = await supabase.from('run_sessions').insert({
         user_id: user.id, 
         km: parseFloat(finalKm.toFixed(2)), 
         points_earned: earned,
         scene: scenes[selected || 'sahara'].name, 
         duration_seconds: Math.round(finalKm * 330),
       })
-
-      // Only redirect AFTER successful updates
+  
+      if (logError) throw logError
+  
+      // 4. ONLY NOW redirect
+      console.log("Sync Complete. Sessions Updated to:", updatedSessions)
       router.push('/dashboard')
-
+  
     } catch (err) {
-      console.error("CRITICAL RUN UPDATE ERROR:", err)
-      // Optional: alert the user or redirect anyway
+      console.error("Database Update Failed:", err)
+      // If it fails, we still want to go back, but we'll know why
       router.push('/dashboard')
     }
   }
