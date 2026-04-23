@@ -3,45 +3,74 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
-const scenes = [
-  { id: 'mountain', name: 'Mountain Trail', desc: 'Alpine peaks, cool forest air', emoji: '🏔️', colors: { sky: ['#1a6fa8', '#4ab0e8'], ground: ['#4a7a3a', '#2d5a22'], road: '#8a7a5a' } },
-  { id: 'ocean', name: 'Ocean Moonrun', desc: 'Midnight beach, moonlit waves', emoji: '🌊', colors: { sky: ['#0d2a5e', '#1a4fa8'], ground: ['#1a5ea0', '#0d3d6e'], road: '#2a4a7a' } },
-  { id: 'sahara', name: 'Sahara Dusk', desc: 'Golden dunes, setting sun', emoji: '🌅', colors: { sky: ['#e8c56a', '#f2a83b'], ground: ['#c8a050', '#987020'], road: '#b89040' } },
-]
+interface WorldConfig {
+  name: string;
+  sky: string;
+  path: string;
+  accent: string;
+  ground: string;
+  grainBase: string;
+  sun?: string;
+  moon?: string;
+  objects: string[];
+}
+
+const scenes: Record<string, WorldConfig> = {
+  sahara: { 
+    name: 'SAHARA_VR', sky: '#fef3c7', path: '#9a3412', accent: '#166534', ground: '#fb923c', grainBase: '#7c2d12', sun: '#fbbf24',
+    objects: ['cactus', 'camel'] 
+  },
+  beach: { 
+    name: 'OCEAN_DRIFT', sky: '#081428', path: '#1e293b', accent: '#065f46', ground: '#0f172a', grainBase: '#38bdf8', moon: '#f1f5f9',
+    objects: ['palm', 'post'] 
+  }
+}
 
 export default function RunPage() {
   const router = useRouter()
   const supabase = createClient()
+  
   const [selected, setSelected] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [initializing, setInitializing] = useState(false)
+  const [loadText, setLoadText] = useState('')
   const [km, setKm] = useState(0)
   const [points, setPoints] = useState(0)
-  const [currentScene, setCurrentScene] = useState(0)
-  const [roadOffset, setRoadOffset] = useState(0)
+  
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animRef = useRef<number>(0)
   const lastTs = useRef<number>(0)
-  const sceneTimer = useRef(0)
   const kmRef = useRef(0)
-  const trees = useRef<{ x: number; z: number }[]>([])
+  
+  const state = useRef({
+    entities: [] as { x: number, z: number, side: number, type: string }[],
+    textureTiles: Array.from({ length: 1500 }, () => ({
+      x: Math.random() * 2000 - 1000,
+      zOffset: Math.random() * 10,
+      side: Math.random() > 0.5 ? 1 : -1,
+      shade: Math.random()
+    }))
+  })
+
+  const bootSequence = [
+    "> INITIALIZING OPTIC_OS v9.2...",
+    "> CALIBRATING RETINAL PROJECTION...",
+    "> ESTABLISHING NEURAL LINK...",
+    "> LOADING BIOME DATASETS...",
+    "> CONNECTION STABLE. STARTING..."
+  ]
 
   function toggleScene(id: string) {
     setSelected(prev => (prev === id ? null : id))
   }
 
-  function startRun() {
-    if (!selected) {
-      alert('Select a world first')
-      return
+  async function startRun() {
+    if (!selected) return alert('Select a world first')
+    setInitializing(true)
+    for (let i = 0; i < bootSequence.length; i++) {
+      setLoadText(bootSequence[i]); await new Promise(r => setTimeout(r, 600))
     }
-  
-    setRunning(true)
-    setKm(0)
-    kmRef.current = 0
-    trees.current = []
-    sceneTimer.current = 0
-    setCurrentScene(0)
-    lastTs.current = 0
+    setInitializing(false); setRunning(true); setKm(0); kmRef.current = 0; state.current.entities = []; lastTs.current = 0
   }
 
   async function stopRun() {
@@ -59,413 +88,163 @@ export default function RunPage() {
           streak: profile.streak + 1,
         }).eq('id', user.id)
         await supabase.from('run_sessions').insert({
-          user_id: user.id,
-          km: parseFloat(kmRef.current.toFixed(2)),
-          points_earned: earned,
-          scene: scenes[currentScene]?.name || 'Unknown',
-          duration_seconds: Math.round(kmRef.current * 330),
+          user_id: user.id, km: parseFloat(kmRef.current.toFixed(2)), points_earned: earned,
+          scene: scenes[selected || 'sahara'].name, duration_seconds: Math.round(kmRef.current * 330),
         })
       }
     }
     router.push('/dashboard')
   }
 
+  const drawAsset = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, type: string, world: WorldConfig) => {
+    ctx.globalAlpha = Math.min(s * 5, 1)
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x, y, 60 * s, 15 * s, 0, 0, Math.PI * 2); ctx.fill()
+
+    if (type === 'cactus') {
+      ctx.fillStyle = world.accent; ctx.fillRect(x - 12 * s, y - 180 * s, 24 * s, 180 * s)
+      ctx.fillRect(x - 45 * s, y - 130 * s, 35 * s, 15 * s); ctx.fillRect(x - 45 * s, y - 170 * s, 15 * s, 50 * s)
+    } else if (type === 'camel') {
+      ctx.fillStyle = '#92400e'; ctx.fillRect(x - 50 * s, y - 70 * s, 100 * s, 45 * s)
+      ctx.beginPath(); ctx.arc(x - 18 * s, y - 70 * s, 28 * s, Math.PI, 0); ctx.fill()
+      ctx.beginPath(); ctx.arc(x + 18 * s, y - 70 * s, 28 * s, Math.PI, 0); ctx.fill()
+      ctx.fillRect(x + 45 * s, y - 120 * s, 15 * s, 80 * s); ctx.fillRect(x + 45 * s, y - 130 * s, 40 * s, 20 * s)
+      ctx.fillRect(x - 40 * s, y - 25 * s, 12 * s, 25 * s); ctx.fillRect(x + 28 * s, y - 25 * s, 12 * s, 25 * s)
+    } else if (type === 'palm') {
+      ctx.fillStyle = '#451a03'; ctx.fillRect(x - 8 * s, y - 250 * s, 16 * s, 250 * s) // Trunk
+      ctx.fillStyle = world.accent; // Leaves
+      for(let i=0; i<5; i++) {
+        ctx.beginPath(); ctx.ellipse(x + (Math.cos(i)*40*s), y - 250*s + (Math.sin(i)*20*s), 60*s, 15*s, i, 0, Math.PI*2); ctx.fill()
+      }
+    } else if (type === 'post') {
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(x - 4 * s, y - 150 * s, 8 * s, 150 * s)
+      ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.arc(x, y - 155 * s, 6 * s, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.globalAlpha = 1
+  }
+
+  function drawScene() {
+    const canvas = canvasRef.current; if (!canvas) return
+    const ctx = canvas.getContext('2d', { alpha: false }); if (!ctx) return
+    const W = canvas.width, H = canvas.height
+    const world = scenes[selected || 'sahara']
+    const horizonY = H * 0.5
+    const s = state.current
+
+    ctx.fillStyle = world.sky; ctx.fillRect(0, 0, W, horizonY)
+    ctx.fillStyle = world.ground; ctx.fillRect(0, horizonY, W, H - horizonY)
+    
+    if (world.sun) {
+      ctx.fillStyle = world.sun; ctx.beginPath(); ctx.arc(W * 0.85, H * 0.2, 45, 0, Math.PI * 2); ctx.fill()
+    }
+    if (world.moon) {
+      ctx.fillStyle = world.moon; ctx.beginPath(); ctx.arc(W * 0.15, H * 0.15, 30, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.1)'; ctx.fillRect(W * 0.1, horizonY, 80, H - horizonY) // Reflection
+    }
+
+    s.textureTiles.forEach(g => {
+      const z = ((g.zOffset - (kmRef.current * 15)) % 10 + 10) % 10 / 4
+      if (z > 0.01 && z < 2.5) {
+        const scale = z * z
+        const tx = W/2 + ((750 + g.x) * scale * g.side)
+        const ty = horizonY + (450 * scale)
+        if (ty > horizonY && ty < H) {
+          ctx.fillStyle = world.grainBase; ctx.globalAlpha = g.shade * 0.4
+          ctx.fillRect(tx, ty, 6 * scale, 6 * scale)
+        }
+      }
+    })
+    ctx.globalAlpha = 1
+    ctx.fillStyle = world.path; ctx.beginPath(); ctx.moveTo(W/2 - 10, horizonY); ctx.lineTo(W/2 + 10, horizonY); ctx.lineTo(W/2 + 420, H); ctx.lineTo(W/2 - 420, H); ctx.fill()
+    ctx.strokeStyle = 'white'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(W/2 - 10, horizonY); ctx.lineTo(W/2 - 420, H); ctx.stroke(); ctx.moveTo(W/2 + 10, horizonY); ctx.lineTo(W/2 + 420, H); ctx.stroke()
+    ctx.setLineDash([50, 70]); ctx.lineDashOffset = -(kmRef.current * 800); ctx.beginPath(); ctx.moveTo(W/2, horizonY); ctx.lineTo(W/2, H); ctx.stroke(); ctx.setLineDash([])
+
+    s.entities.forEach(e => {
+      const pScale = e.z * e.z
+      const x = W/2 + (e.x * pScale * e.side); const y = horizonY + (450 * pScale)
+      if (e.z < 2.6) drawAsset(ctx, x, y, pScale, e.type, world)
+    })
+  }
+
   useEffect(() => {
     if (!running) return
     function loop(ts: number) {
       if (!lastTs.current) lastTs.current = ts
-      const dt = (ts - lastTs.current) / 1000
-      lastTs.current = ts
-      kmRef.current += dt * 0.004
-      setKm(parseFloat(kmRef.current.toFixed(2)))
-      setPoints(Math.round(kmRef.current * 80))
-      sceneTimer.current += dt
-      if (sceneTimer.current > 8) {
-        sceneTimer.current = 0
+      const dt = (ts - lastTs.current) / 1000; lastTs.current = ts
+      kmRef.current += dt * 0.005; setKm(kmRef.current); setPoints(Math.round(kmRef.current * 80))
+      if (Math.random() < 0.035) {
+        state.current.entities.push({ x: 650, side: Math.random() > 0.5 ? 1 : -1, z: 0.01, type: scenes[selected || 'sahara'].objects[Math.floor(Math.random() * 2)] })
       }
-      setRoadOffset(prev => (prev + dt * 120) % 80)
-      if (Math.random() < 0.03) trees.current.push({ x: Math.random() * 400, z: 0 })
-      trees.current = trees.current.filter(t => t.z < 1.5)
-      trees.current.forEach(t => (t.z += dt * 0.5))
-      drawScene()
-      animRef.current = requestAnimationFrame(loop)
+      state.current.entities.forEach(e => e.z += dt * 0.85); state.current.entities = state.current.entities.filter(e => e.z < 2.6)
+      drawScene(); animRef.current = requestAnimationFrame(loop)
     }
     animRef.current = requestAnimationFrame(loop)
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
   }, [running, selected])
 
-  function drawScene() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const W = canvas.width, H = canvas.height
-    const scIdx = scenes.findIndex(s => s.id === selected)
-    const scene = scenes[Math.max(0, scIdx)]
-    const horizY = H * 0.42
-
-    ctx.clearRect(0, 0, W, H)
-
-    if (scene.id === 'mountain') {
-      // Sky with aurora effect
-      const skyG = ctx.createLinearGradient(0, 0, 0, horizY)
-      skyG.addColorStop(0, '#0a1628')
-      skyG.addColorStop(0.4, '#0d3060')
-      skyG.addColorStop(1, '#1a6fa8')
-      ctx.fillStyle = skyG; ctx.fillRect(0, 0, W, horizY)
-
-      // Stars
-      ctx.fillStyle = 'rgba(255,255,255,0.9)'
-      for (let i = 0; i < 80; i++) {
-        const sx = (i * 137.5) % W
-        const sy = (i * 97.3) % (horizY * 0.8)
-        const sr = i % 3 === 0 ? 1.2 : 0.6
-        ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill()
-      }
-
-      // Aurora
-      const auroraG = ctx.createLinearGradient(0, 0, W, 0)
-      auroraG.addColorStop(0, 'rgba(0,255,150,0)')
-      auroraG.addColorStop(0.3, 'rgba(0,255,150,0.08)')
-      auroraG.addColorStop(0.5, 'rgba(100,200,255,0.12)')
-      auroraG.addColorStop(0.7, 'rgba(150,100,255,0.08)')
-      auroraG.addColorStop(1, 'rgba(150,100,255,0)')
-      ctx.fillStyle = auroraG
-      ctx.fillRect(0, horizY * 0.1, W, horizY * 0.5)
-
-      // Far mountains (dark blue)
-      ctx.fillStyle = '#0d2a4a'
-      ctx.beginPath(); ctx.moveTo(0, horizY)
-      ctx.lineTo(50, horizY - 80); ctx.lineTo(130, horizY - 40)
-      ctx.lineTo(200, horizY - 110); ctx.lineTo(280, horizY - 60)
-      ctx.lineTo(350, horizY - 130); ctx.lineTo(420, horizY - 70)
-      ctx.lineTo(500, horizY - 120); ctx.lineTo(580, horizY - 55)
-      ctx.lineTo(650, horizY - 100); ctx.lineTo(720, horizY - 45)
-      ctx.lineTo(800, horizY - 90); ctx.lineTo(W, horizY)
-      ctx.closePath(); ctx.fill()
-
-      // Mid mountains (dark teal)
-      ctx.fillStyle = '#0f3d2a'
-      ctx.beginPath(); ctx.moveTo(0, horizY)
-      ctx.lineTo(80, horizY - 55); ctx.lineTo(160, horizY - 25)
-      ctx.lineTo(240, horizY - 75); ctx.lineTo(320, horizY - 35)
-      ctx.lineTo(400, horizY - 85); ctx.lineTo(480, horizY - 30)
-      ctx.lineTo(560, horizY - 65); ctx.lineTo(640, horizY - 20)
-      ctx.lineTo(720, horizY - 60); ctx.lineTo(W, horizY - 30)
-      ctx.lineTo(W, horizY)
-      ctx.closePath(); ctx.fill()
-
-      // Snow caps
-      ctx.fillStyle = 'rgba(200,230,255,0.7)'
-      ;[[200, horizY - 110, 30], [350, horizY - 130, 35], [500, horizY - 120, 28]].forEach(([px, py, size]) => {
-        ctx.beginPath()
-        ctx.moveTo(px as number, py as number)
-        ctx.lineTo((px as number) - (size as number), (py as number) + (size as number) * 0.6)
-        ctx.lineTo((px as number) + (size as number), (py as number) + (size as number) * 0.6)
-        ctx.closePath(); ctx.fill()
-      })
-
-      // Ground
-      const gG = ctx.createLinearGradient(0, horizY, 0, H)
-      gG.addColorStop(0, '#1a3a20')
-      gG.addColorStop(0.4, '#2d5a28')
-      gG.addColorStop(1, '#1a2e18')
-      ctx.fillStyle = gG; ctx.fillRect(0, horizY, W, H - horizY)
-
-      // Ground texture lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1
-      for (let i = 0; i < 6; i++) {
-        const y = horizY + (H - horizY) * (i / 6)
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-      }
-
-    } else if (scene.id === 'ocean') {
-      // Night sky
-      const skyG = ctx.createLinearGradient(0, 0, 0, horizY)
-      skyG.addColorStop(0, '#020814')
-      skyG.addColorStop(0.6, '#050f2a')
-      skyG.addColorStop(1, '#0a1f4a')
-      ctx.fillStyle = skyG; ctx.fillRect(0, 0, W, horizY)
-
-      // Stars
-      ctx.fillStyle = 'rgba(255,255,255,0.95)'
-      for (let i = 0; i < 120; i++) {
-        const sx = (i * 173.1) % W
-        const sy = (i * 89.7) % (horizY * 0.85)
-        const sr = i % 5 === 0 ? 1.5 : 0.7
-        ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill()
-      }
-
-      // Moon
-      const moonX = W * 0.78, moonY = horizY * 0.25
-      const moonGlow = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 80)
-      moonGlow.addColorStop(0, 'rgba(255,245,180,0.15)')
-      moonGlow.addColorStop(1, 'rgba(255,245,180,0)')
-      ctx.fillStyle = moonGlow; ctx.beginPath(); ctx.arc(moonX, moonY, 80, 0, Math.PI * 2); ctx.fill()
-      ctx.fillStyle = '#fffacd'; ctx.beginPath(); ctx.arc(moonX, moonY, 22, 0, Math.PI * 2); ctx.fill()
-
-      // Moon reflection on water
-      const refG = ctx.createLinearGradient(W * 0.7, horizY, W * 0.85, H)
-      refG.addColorStop(0, 'rgba(255,245,180,0.25)')
-      refG.addColorStop(1, 'rgba(255,245,180,0)')
-      ctx.fillStyle = refG
-      ctx.beginPath()
-      ctx.moveTo(W * 0.74, horizY); ctx.lineTo(W * 0.82, horizY)
-      ctx.lineTo(W * 0.95, H); ctx.lineTo(W * 0.62, H)
-      ctx.closePath(); ctx.fill()
-
-      // Ocean layers
-      ;['#0a2a4a', '#0d3560', '#0f4070', '#124a80'].forEach((color, i) => {
-        const y = horizY + (H - horizY) * (i / 4)
-        const h2 = (H - horizY) / 4 + 2
-        ctx.fillStyle = color; ctx.fillRect(0, y, W, h2)
-      })
-
-      // Waves
-      for (let w = 0; w < 5; w++) {
-        const wy = horizY + (H - horizY) * ((w + (roadOffset / 80)) % 5) / 5
-        const alpha = 0.1 + w * 0.05
-        ctx.strokeStyle = `rgba(100,180,255,${alpha})`
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        for (let x = 0; x < W; x += 4) {
-          const wave = Math.sin((x / 60) + w) * 3
-          if (x === 0) ctx.moveTo(x, wy + wave)
-          else ctx.lineTo(x, wy + wave)
-        }
-        ctx.stroke()
-      }
-
-    } else if (scene.id === 'sahara') {
-      // Sunset sky
-      const skyG = ctx.createLinearGradient(0, 0, 0, horizY)
-      skyG.addColorStop(0, '#0a0520')
-      skyG.addColorStop(0.3, '#2d0a40')
-      skyG.addColorStop(0.6, '#8b1a1a')
-      skyG.addColorStop(0.8, '#d4400a')
-      skyG.addColorStop(1, '#f07020')
-      ctx.fillStyle = skyG; ctx.fillRect(0, 0, W, horizY)
-
-      // Stars (top portion only)
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'
-      for (let i = 0; i < 60; i++) {
-        const sx = (i * 143.7) % W
-        const sy = (i * 67.3) % (horizY * 0.4)
-        ctx.beginPath(); ctx.arc(sx, sy, 0.8, 0, Math.PI * 2); ctx.fill()
-      }
-
-      // Sun
-      const sunX = W * 0.22, sunY = horizY * 0.85
-      const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 120)
-      sunGlow.addColorStop(0, 'rgba(255,200,50,0.4)')
-      sunGlow.addColorStop(0.4, 'rgba(255,120,20,0.2)')
-      sunGlow.addColorStop(1, 'rgba(255,80,0,0)')
-      ctx.fillStyle = sunGlow; ctx.beginPath(); ctx.arc(sunX, sunY, 120, 0, Math.PI * 2); ctx.fill()
-      const sunCore = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 28)
-      sunCore.addColorStop(0, '#fff5aa')
-      sunCore.addColorStop(0.5, '#ffb830')
-      sunCore.addColorStop(1, '#ff6010')
-      ctx.fillStyle = sunCore; ctx.beginPath(); ctx.arc(sunX, sunY, 28, 0, Math.PI * 2); ctx.fill()
-
-      // Dunes far
-      ctx.fillStyle = '#8b4a10'
-      ctx.beginPath(); ctx.moveTo(0, horizY)
-      ctx.quadraticCurveTo(100, horizY - 45, 200, horizY - 20)
-      ctx.quadraticCurveTo(320, horizY - 60, 440, horizY - 25)
-      ctx.quadraticCurveTo(580, horizY - 55, 700, horizY - 15)
-      ctx.quadraticCurveTo(780, horizY - 35, W, horizY)
-      ctx.lineTo(W, horizY); ctx.lineTo(0, horizY); ctx.closePath(); ctx.fill()
-
-      // Dunes near
-      const duneG = ctx.createLinearGradient(0, horizY, 0, H)
-      duneG.addColorStop(0, '#c87830')
-      duneG.addColorStop(0.3, '#d4903a')
-      duneG.addColorStop(0.7, '#b86820')
-      duneG.addColorStop(1, '#8b4a10')
-      ctx.fillStyle = duneG; ctx.fillRect(0, horizY, W, H - horizY)
-
-      // Dune ripples
-      ctx.strokeStyle = 'rgba(180,100,20,0.3)'; ctx.lineWidth = 1
-      for (let r = 0; r < 8; r++) {
-        const ry = horizY + (H - horizY) * (r / 8) + 10
-        ctx.beginPath()
-        for (let x = 0; x < W; x += 3) {
-          const wave = Math.sin((x / 40) + r * 0.7) * 2
-          if (x === 0) ctx.moveTo(x, ry + wave)
-          else ctx.lineTo(x, ry + wave)
-        }
-        ctx.stroke()
-      }
-    }
-
-    // VR lens distortion vignette
-    const vignette = ctx.createRadialGradient(W/2, H/2, H * 0.3, W/2, H/2, H * 0.85)
-    vignette.addColorStop(0, 'rgba(0,0,0,0)')
-    vignette.addColorStop(1, 'rgba(0,0,0,0.75)')
-    ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H)
-
-    // Road
-    const vp = { x: W / 2, y: horizY }
-    const roadG = ctx.createLinearGradient(0, horizY, 0, H)
-    roadG.addColorStop(0, scene.id === 'ocean' ? '#1a2a4a' : scene.id === 'sahara' ? '#7a5a30' : '#4a4a3a')
-    roadG.addColorStop(1, scene.id === 'ocean' ? '#0d1a30' : scene.id === 'sahara' ? '#5a3a18' : '#2a2a1a')
-    ctx.fillStyle = roadG
-    ctx.beginPath()
-    ctx.moveTo(vp.x - 6, vp.y); ctx.lineTo(vp.x + 6, vp.y)
-    ctx.lineTo(vp.x + 130, H); ctx.lineTo(vp.x - 130, H)
-    ctx.closePath(); ctx.fill()
-
-    // Road edge lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5
-    ctx.beginPath(); ctx.moveTo(vp.x - 6, vp.y); ctx.lineTo(vp.x - 130, H); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(vp.x + 6, vp.y); ctx.lineTo(vp.x + 130, H); ctx.stroke()
-
-    // Road dashes
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
-    for (let i = 0; i < 12; i++) {
-      const t = ((i / 12) + (roadOffset / 80)) % 1
-      const y = horizY + (H - horizY) * t
-      const w2 = 5 * t
-      ctx.lineWidth = Math.max(1, t * 3)
-      ctx.beginPath(); ctx.moveTo(vp.x - w2, y); ctx.lineTo(vp.x + w2, y); ctx.stroke()
-    }
-
-    // Trees / cacti / posts along road
-    trees.current.forEach(tree => {
-      const t = tree.z
-      const scale = 0.1 + t * 0.9
-      const baseY = horizY + (H - horizY) * t
-      const side = tree.x < 200 ? -1 : 1
-      const tx = vp.x + side * (130 * t + 15)
-
-      if (scene.id === 'mountain') {
-        // Pine trees
-        const h2 = 70 * scale
-        const trunkW = 5 * scale
-        ctx.fillStyle = '#3d2b1f'
-        ctx.fillRect(tx - trunkW / 2, baseY - h2 * 0.35, trunkW, h2 * 0.35)
-        ;['#1a5c1a', '#226622', '#2d7a2d'].forEach((color, layer) => {
-          ctx.fillStyle = color
-          const lh = h2 * (0.5 + layer * 0.2)
-          const lw = (28 - layer * 6) * scale
-          ctx.beginPath()
-          ctx.moveTo(tx, baseY - h2 - layer * h2 * 0.1)
-          ctx.lineTo(tx - lw, baseY - lh + layer * 10 * scale)
-          ctx.lineTo(tx + lw, baseY - lh + layer * 10 * scale)
-          ctx.closePath(); ctx.fill()
-        })
-      } else if (scene.id === 'ocean') {
-        // Palm trees
-        const h2 = 65 * scale
-        ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 4 * scale
-        ctx.beginPath()
-        ctx.moveTo(tx, baseY)
-        ctx.quadraticCurveTo(tx + side * 8 * scale, baseY - h2 * 0.5, tx + side * 4 * scale, baseY - h2)
-        ctx.stroke()
-        // Palm leaves
-        ;[[-30, -15], [0, -25], [30, -15], [-20, -5], [20, -5]].forEach(([lx, ly]) => {
-          ctx.strokeStyle = '#2d7a2d'; ctx.lineWidth = 2.5 * scale
-          ctx.beginPath()
-          ctx.moveTo(tx + side * 4 * scale, baseY - h2)
-          ctx.quadraticCurveTo(
-            tx + side * 4 * scale + lx * scale * 0.5,
-            baseY - h2 + ly * scale * 0.5,
-            tx + side * 4 * scale + lx * scale,
-            baseY - h2 + ly * scale
-          )
-          ctx.stroke()
-        })
-      } else {
-        // Cacti
-        const h2 = 50 * scale
-        ctx.fillStyle = '#2d6b20'
-        ctx.fillRect(tx - 4 * scale, baseY - h2, 8 * scale, h2)
-        ctx.fillRect(tx - 16 * scale, baseY - h2 * 0.6, 12 * scale, 5 * scale)
-        ctx.fillRect(tx + 4 * scale, baseY - h2 * 0.7, 12 * scale, 5 * scale)
-        ctx.fillRect(tx - 16 * scale, baseY - h2 * 0.6, 5 * scale, 16 * scale)
-        ctx.fillRect(tx + 11 * scale, baseY - h2 * 0.7, 5 * scale, 14 * scale)
-      }
-    })
-
-    // VR grid overlay (subtle)
-    ctx.strokeStyle = 'rgba(100,200,255,0.04)'; ctx.lineWidth = 0.5
-    for (let gx = 0; gx < W; gx += 40) {
-      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke()
-    }
-    for (let gy = 0; gy < H; gy += 40) {
-      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke()
-    }
-
-    // HUD scanline effect
-    ctx.fillStyle = 'rgba(0,0,0,0.03)'
-    for (let sl = 0; sl < H; sl += 3) {
-      ctx.fillRect(0, sl, W, 1)
-    }
-  }
+  if (initializing) return (
+    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center font-mono p-12">
+      <div className="w-full max-w-xs h-1 bg-white/10 rounded-full mb-8 overflow-hidden"><div className="h-full bg-cyan-400 animate-[loading_4s_linear_infinite]" style={{ width: '60%' }} /></div>
+      <div className="text-cyan-400 text-[11px] tracking-[0.4em] font-black animate-pulse text-center leading-loose">{loadText}</div>
+    </div>
+  )
 
   if (running) return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#000' }}>
-      <canvas ref={canvasRef} width={800} height={450} className="w-full" style={{ maxHeight: '60vh' }} />
-      <div className="flex-1 px-6 py-4" style={{ background: '#0f0c29' }}>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {[{ label: 'KM', value: km.toFixed(2) }, { label: 'PTS EARNED', value: points }, { label: 'PACE', value: '5:30' }].map((s, i) => (
-            <div key={i} className="rounded-xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)' }}>
-              <div className="text-white text-xl font-semibold">{s.value}</div>
-              <div className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{s.label}</div>
+    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-4 overflow-hidden select-none cursor-none font-mono">
+       <div className="relative w-full max-w-6xl aspect-[16/10] rounded-[140px] border-[18px] border-zinc-900 bg-black shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex items-center justify-center">
+          <div className="relative w-[98%] h-[96%] rounded-[120px] overflow-hidden">
+            <canvas ref={canvasRef} width={1280} height={800} className="w-full h-full scale-105" />
+            <div className="absolute inset-0 pointer-events-none p-16 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_12px_red]" />
+                    <span className="text-white text-[12px] font-black tracking-[0.2em] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">REC // NEURAL_LINK</span>
+                  </div>
+                  <div className="text-cyan-400 font-black text-[10px] uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">FPS: 60 // LATENCY: 12ms // STABLE</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-white text-[12px] font-black tracking-widest uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">NODE: {selected?.toUpperCase()}</div>
+                  <div className="text-white/80 font-black text-[10px] uppercase tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{new Date().toLocaleTimeString()}</div>
+                </div>
+              </div>
+              <div className="flex justify-between items-end">
+                <div className="text-white font-black text-[10px] leading-tight tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">AZIMUTH: 182.4° <br/> ALTITUDE: 0.042m <br/> SYNC_STATUS: ACTIVE</div>
+                <div className="text-right space-y-3">
+                  <div className="text-cyan-400 text-[12px] font-black tracking-[0.3em] uppercase drop-shadow-[0_0_100px_rgba(34,211,238,0.8)]">SENSES: CONNECTED</div>
+                  <div className="w-40 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/20 shadow-[0_0_15px_rgba(0,0,0,0.8)]"><div className="h-full bg-cyan-400 shadow-[0_0_12px_#22d3ee] w-[88%]" /></div>
+                </div>
+              </div>
             </div>
-          ))}
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle,transparent_45%,rgba(0,0,0,0.9)_100%)]" />
+          </div>
+          <div className="absolute top-0 bottom-0 left-1/2 w-32 -translate-x-1/2 bg-gradient-to-r from-black via-zinc-950 to-black opacity-40 blur-xl pointer-events-none" />
         </div>
-        <p className="text-center text-xs mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          Now in: {scenes.find(s => s.id === selected)?.name}
-        </p>
-        <button onClick={stopRun} className="w-full py-3 rounded-xl font-medium text-white" style={{ background: '#e74c3c' }}>
-          Stop Run & Save
-        </button>
+      <div className="mt-8 grid grid-cols-3 gap-12 w-full max-w-xl">
+        <div className="text-center"><div className="text-white text-5xl font-black italic drop-shadow-lg">{km.toFixed(2)}</div><div className="text-[10px] text-white/30 tracking-widest uppercase mt-1 font-bold">KILOMETERS</div></div>
+        <div className="text-center"><div className="text-cyan-400 text-5xl font-black italic drop-shadow-lg">{points}</div><div className="text-[10px] text-cyan-400/30 tracking-widest uppercase mt-1 font-bold">POINTS_EARNED</div></div>
+        <div className="text-center"><div className="text-white text-5xl font-black italic drop-shadow-lg">5:30</div><div className="text-[10px] text-white/30 tracking-widest uppercase mt-1 font-bold">AVG_PACE</div></div>
       </div>
+      <button onClick={stopRun} className="mt-12 text-white/30 hover:text-white text-[10px] font-black tracking-[0.6em] transition-all uppercase px-10 py-5 border border-white/5 hover:border-white/20 rounded-full bg-zinc-900/50">Terminate Neural Link</button>
     </div>
   )
 
   return (
-    <div className="min-h-screen" style={{ background: '#0f0c29' }}>
-      <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: '0.5px solid rgba(255,255,255,0.1)' }}>
-        <button onClick={() => router.push('/dashboard')} style={{ color: 'rgba(255,255,255,0.5)' }}>← Back</button>
-        <span className="text-white font-semibold">Pick your scene</span>
-      </div>
-      <div className="px-6 py-4">
-        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>Choose up to 3 VR worlds</p>
-        <div className="flex flex-col gap-3 mb-6">
-          {scenes.map(scene => {
-            const isPicked = selected === scene.id
-            return (
-              <div
-                key={scene.id}
-                onClick={() => toggleScene(scene.id)}
-                className="flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all"
-                style={{
-                  background: isPicked ? 'rgba(108,92,231,0.2)' : 'rgba(255,255,255,0.04)',
-                  border: isPicked ? '2px solid #6c5ce7' : '0.5px solid rgba(255,255,255,0.1)'
-                }}
-              >
-                <div className="text-4xl">{scene.emoji}</div>
-                <div className="flex-1">
-                  <div className="text-white font-medium">{scene.name}</div>
-                  <div className="text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>{scene.desc}</div>
-                </div>
-                {isPicked && <div className="text-sm px-3 py-1 rounded-full" style={{ background: '#6c5ce7', color: '#fff' }}>✓</div>}
-              </div>
-            )
-          })}
+    <div className="min-h-screen bg-[#050505] font-mono text-white p-8">
+      <div className="max-w-md mx-auto space-y-12">
+        <div className="text-center space-y-2">
+          <div className="text-cyan-500 text-[10px] font-black tracking-[0.4em] uppercase">Select Projection</div>
+          <h1 className="text-6xl font-black italic tracking-tighter">SPATIAL</h1>
         </div>
-        <button
-          onClick={startRun}
-          disabled={!selected}
-          className="w-full py-4 rounded-2xl font-semibold text-white transition-all"
-          style={{ 
-            background: selected ? '#6c5ce7' : 'rgba(255,255,255,0.1)', 
-            opacity: selected ? 1 : 0.5 
-          }}
-        >
-         {selected ? `Start VR Run · 1 scene` : 'Select a scene first'}
+        <div className="grid gap-4">
+          {Object.entries(scenes).map(([id, world]) => (
+            <button key={id} onClick={() => toggleScene(id)} className={`p-10 rounded-[48px] border text-left transition-all ${selected === id ? 'bg-zinc-800 border-cyan-500/50 shadow-[0_0_40px_rgba(34,211,238,0.15)]' : 'bg-zinc-900 border-white/5'}`}>
+              <div className="text-[10px] text-white/20 mb-1 tracking-widest uppercase font-black">Node_0{id}</div>
+              <div className="text-2xl font-black italic text-white/90">{world.name}</div>
+            </button>
+          ))}
+        </div>
+        <button onClick={startRun} disabled={!selected} className={`w-full py-7 rounded-[40px] font-black italic tracking-[0.2em] transition-all ${selected ? 'bg-white text-black shadow-2xl scale-105' : 'bg-zinc-900 text-white/20 border border-white/5 opacity-50'}`}>
+          {selected ? 'INITIALIZE LINK' : 'SELECT BIOME'}
         </button>
       </div>
     </div>
