@@ -250,9 +250,7 @@ export default function LoginPage() {
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
-            <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.08)' }} />
-            <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11, letterSpacing: 2 }}>OR</span>
-            <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.08)' }} />
+            
           </div>
 
         </div>
