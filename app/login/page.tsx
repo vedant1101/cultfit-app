@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase'
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [email, setEmail] = useState('test@cultfit.com')
-  const [password, setPassword] = useState('Test@1234')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
