@@ -9,7 +9,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState('test@cultfit.com')
   const [password, setPassword] = useState('Test@1234')
   const [name, setName] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [time, setTime] = useState(new Date())
@@ -134,24 +133,6 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
   
-    if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name } }
-        })
-      
-        if (error) {
-          setError(error.message)
-        } else {
-          // ✅ IMPORTANT FIX
-          if (data.session) {
-            router.push('/dashboard')
-          } else {
-            setError('Check your email to confirm signup')
-          }
-        }
-      } else {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -160,7 +141,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       }
-    }
+    
   
     setLoading(false)
   }
@@ -215,28 +196,15 @@ export default function LoginPage() {
               </svg>
             </div>
             <div style={{ color: 'rgba(0,245,255,0.5)', fontSize: 10, letterSpacing: 5, marginBottom: 6 }}>
-              {isSignUp ? 'NEW ATHLETE' : 'ATHLETE LOGIN'}
+            ATHLETE LOGIN
             </div>
             <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.5 }}>
-              {isSignUp ? 'Create Account' : 'Welcome Back'}
+              Welcome Back
             </h1>
           </div>
 
           {/* Inputs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {isSignUp && (
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(0,245,255,0.4)', fontSize: 12 }}>◈</div>
-                <input
-                  style={{ width: '100%', padding: '13px 14px 13px 34px', background: 'rgba(255,255,255,0.04)', border: '0.5px solid rgba(0,245,255,0.2)', borderRadius: 10, color: '#fff', fontSize: 14, outline: 'none', boxSizing: 'border-box', letterSpacing: 0.5 }}
-                  placeholder="Your name"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  onFocus={e => e.target.style.borderColor = 'rgba(0,245,255,0.6)'}
-                  onBlur={e => e.target.style.borderColor = 'rgba(0,245,255,0.2)'}
-                />
-              </div>
-            )}
 
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(0,245,255,0.4)', fontSize: 12 }}>◉</div>
@@ -277,7 +245,7 @@ export default function LoginPage() {
             disabled={loading}
             style={{ width: '100%', marginTop: 20, padding: '14px', borderRadius: 10, background: loading ? 'rgba(108,92,231,0.3)' : 'linear-gradient(135deg,#6c5ce7,#4834d4)', border: '0.5px solid rgba(108,92,231,0.6)', color: '#fff', fontSize: 14, fontWeight: 700, letterSpacing: 2, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 0 20px rgba(108,92,231,0.4)', transition: 'all 0.2s' }}
           >
-            {loading ? 'AUTHENTICATING...' : isSignUp ? 'INITIALIZE ACCOUNT' : 'ENTER CULTFIT'}
+            {loading ? 'AUTHENTICATING...' : 'ENTER CULTFIT'}
           </button>
 
           {/* Divider */}
@@ -286,13 +254,6 @@ export default function LoginPage() {
             <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11, letterSpacing: 2 }}>OR</span>
             <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.08)' }} />
           </div>
-
-          <button
-            onClick={() => { setIsSignUp(!isSignUp); setError('') }}
-            style={{ width: '100%', padding: '12px', borderRadius: 10, background: 'transparent', border: '0.5px solid rgba(0,245,255,0.2)', color: 'rgba(0,245,255,0.7)', fontSize: 13, letterSpacing: 1, cursor: 'pointer' }}
-          >
-            {isSignUp ? 'SIGN IN INSTEAD' : 'CREATE NEW ACCOUNT'}
-          </button>
 
         </div>
       </div>
