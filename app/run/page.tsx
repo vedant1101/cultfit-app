@@ -12,7 +12,7 @@ const scenes = [
 export default function RunPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [selected, setSelected] = useState<string[]>([])
+  const [selected, setSelected] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [km, setKm] = useState(0)
   const [points, setPoints] = useState(0)
@@ -26,12 +26,15 @@ export default function RunPage() {
   const trees = useRef<{ x: number; z: number }[]>([])
 
   function toggleScene(id: string) {
-    setSelected(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : prev.length < 3 ? [...prev, id] : prev
-    )
+    setSelected(prev => (prev === id ? null : id))
   }
 
   function startRun() {
+    if (!selected) {
+      alert('Select a world first')
+      return
+    }
+  
     setRunning(true)
     setKm(0)
     kmRef.current = 0
@@ -77,8 +80,7 @@ export default function RunPage() {
       setKm(parseFloat(kmRef.current.toFixed(2)))
       setPoints(Math.round(kmRef.current * 80))
       sceneTimer.current += dt
-      if (sceneTimer.current > 8 && selected.length > 1) {
-        setCurrentScene(prev => (prev + 1) % selected.length)
+      if (sceneTimer.current > 8) {
         sceneTimer.current = 0
       }
       setRoadOffset(prev => (prev + dt * 120) % 80)
@@ -98,7 +100,7 @@ export default function RunPage() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const W = canvas.width, H = canvas.height
-    const scIdx = scenes.findIndex(s => s.id === selected[currentScene % selected.length])
+    const scIdx = scenes.findIndex(s => s.id === selected)
     const scene = scenes[Math.max(0, scIdx)]
     const horizY = H * 0.42
 
@@ -414,7 +416,7 @@ export default function RunPage() {
           ))}
         </div>
         <p className="text-center text-xs mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          Now in: {scenes.find(s => s.id === selected[currentScene % selected.length])?.name}
+          Now in: {scenes.find(s => s.id === selected)?.name}
         </p>
         <button onClick={stopRun} className="w-full py-3 rounded-xl font-medium text-white" style={{ background: '#e74c3c' }}>
           Stop Run & Save
@@ -433,7 +435,7 @@ export default function RunPage() {
         <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>Choose up to 3 VR worlds</p>
         <div className="flex flex-col gap-3 mb-6">
           {scenes.map(scene => {
-            const isPicked = selected.includes(scene.id)
+            const isPicked = selected === scene.id
             return (
               <div
                 key={scene.id}
@@ -456,11 +458,14 @@ export default function RunPage() {
         </div>
         <button
           onClick={startRun}
-          disabled={selected.length === 0}
+          disabled={!selected}
           className="w-full py-4 rounded-2xl font-semibold text-white transition-all"
-          style={{ background: selected.length > 0 ? '#6c5ce7' : 'rgba(255,255,255,0.1)', opacity: selected.length > 0 ? 1 : 0.5 }}
+          style={{ 
+            background: selected ? '#6c5ce7' : 'rgba(255,255,255,0.1)', 
+            opacity: selected ? 1 : 0.5 
+          }}
         >
-          {selected.length > 0 ? `Start VR Run · ${selected.length} scene${selected.length > 1 ? 's' : ''}` : 'Select a scene first'}
+         {selected ? `Start VR Run · 1 scene` : 'Select a scene first'}
         </button>
       </div>
     </div>
