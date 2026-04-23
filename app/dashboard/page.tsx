@@ -166,7 +166,7 @@ export default function Dashboard() {
                   <span style={{ color: '#fff', fontWeight: 700, fontSize: 20, letterSpacing: 0.5 }}>VR RUN</span>
                   <span style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(0,245,255,0.1)', border: '0.5px solid rgba(0,245,255,0.3)', color: '#00f5ff', fontSize: 9, letterSpacing: 2 }}>LIVE</span>
                 </div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>+80 pts per km · w immersive worlds</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>+80 pts per km · 2 immersive worlds</div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                   {['🌅 Sahara','🌊 Ocean'].map((s, i) => (
                     <div key={i} style={{ padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{s}</div>
