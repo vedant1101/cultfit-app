@@ -110,8 +110,8 @@ export default function RunPage() {
       ctx.fillRect(x + 45 * s, y - 120 * s, 15 * s, 80 * s); ctx.fillRect(x + 45 * s, y - 130 * s, 40 * s, 20 * s)
       ctx.fillRect(x - 40 * s, y - 25 * s, 12 * s, 25 * s); ctx.fillRect(x + 28 * s, y - 25 * s, 12 * s, 25 * s)
     } else if (type === 'palm') {
-      ctx.fillStyle = '#451a03'; ctx.fillRect(x - 8 * s, y - 250 * s, 16 * s, 250 * s) // Trunk
-      ctx.fillStyle = world.accent; // Leaves
+      ctx.fillStyle = '#451a03'; ctx.fillRect(x - 8 * s, y - 250 * s, 16 * s, 250 * s)
+      ctx.fillStyle = world.accent; 
       for(let i=0; i<5; i++) {
         ctx.beginPath(); ctx.ellipse(x + (Math.cos(i)*40*s), y - 250*s + (Math.sin(i)*20*s), 60*s, 15*s, i, 0, Math.PI*2); ctx.fill()
       }
@@ -138,7 +138,7 @@ export default function RunPage() {
     }
     if (world.moon) {
       ctx.fillStyle = world.moon; ctx.beginPath(); ctx.arc(W * 0.15, H * 0.15, 30, 0, Math.PI * 2); ctx.fill()
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.1)'; ctx.fillRect(W * 0.1, horizonY, 80, H - horizonY) // Reflection
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.1)'; ctx.fillRect(W * 0.1, horizonY, 80, H - horizonY)
     }
 
     s.textureTiles.forEach(g => {
@@ -171,8 +171,15 @@ export default function RunPage() {
       if (!lastTs.current) lastTs.current = ts
       const dt = (ts - lastTs.current) / 1000; lastTs.current = ts
       kmRef.current += dt * 0.005; setKm(kmRef.current); setPoints(Math.round(kmRef.current * 80))
+      
+      const currentWorld = scenes[selected || 'sahara']
       if (Math.random() < 0.035) {
-        state.current.entities.push({ x: 650, side: Math.random() > 0.5 ? 1 : -1, z: 0.01, type: scenes[selected || 'sahara'].objects[Math.floor(Math.random() * 2)] })
+        state.current.entities.push({ 
+          x: 650, 
+          side: Math.random() > 0.5 ? 1 : -1, 
+          z: 0.01, 
+          type: currentWorld.objects[Math.floor(Math.random() * currentWorld.objects.length)] 
+        })
       }
       state.current.entities.forEach(e => e.z += dt * 0.85); state.current.entities = state.current.entities.filter(e => e.z < 2.6)
       drawScene(); animRef.current = requestAnimationFrame(loop)
@@ -229,7 +236,25 @@ export default function RunPage() {
   )
 
   return (
-    <div className="min-h-screen bg-[#050505] font-mono text-white p-8">
+    <div className="min-h-screen bg-[#050505] font-mono text-white p-8 relative">
+      {/* BACK BUTTON (CUSTOM SVG) */}
+      <button 
+        onClick={() => router.push('/dashboard')}
+        className="absolute top-8 left-8 p-3 rounded-2xl bg-zinc-900 border border-white/5 hover:border-cyan-500/50 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all group"
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          className="w-6 h-6 text-white/50 group-hover:text-cyan-400"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </button>
+
       <div className="max-w-md mx-auto space-y-12">
         <div className="text-center space-y-2">
           <div className="text-cyan-500 text-[10px] font-black tracking-[0.4em] uppercase">Select Projection</div>
