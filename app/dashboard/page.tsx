@@ -17,7 +17,6 @@ export default function Dashboard() {
   const supabase = createClient()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [time, setTime] = useState(new Date())
-  const [selectedWorld, setSelectedWorld] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -147,14 +146,7 @@ export default function Dashboard() {
           <div style={{ color: 'rgba(0,245,255,0.4)', fontSize: 10, letterSpacing: 4, marginBottom: 14 }}>SELECT ACTIVITY</div>
 
           <div
-            onClick={() => {
-                if (!selectedWorld) {
-                  alert('Select a world first')
-                  return
-                }
-              
-                router.push('/run')
-              }}
+            onClick={() => router.push('/run')}
             style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '28px 24px', cursor: 'pointer', background: 'rgba(108,92,231,0.08)', border: '0.5px solid rgba(108,92,231,0.4)', transition: 'all 0.2s' }}
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.border = '0.5px solid rgba(0,245,255,0.6)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(108,92,231,0.15)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.border = '0.5px solid rgba(108,92,231,0.4)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(108,92,231,0.08)' }}
@@ -176,34 +168,9 @@ export default function Dashboard() {
                 </div>
                 <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>+80 pts per km · 3 immersive worlds</div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                {['🏔 Mountain', '🌊 Ocean', '🌅 Sahara'].map((s, i) => (
-  <div
-    key={i}
-    onClick={() => setSelectedWorld(s)}
-    style={{
-      padding: '3px 8px',
-      borderRadius: 6,
-      cursor: 'pointer',
-      fontSize: 11,
-      transition: 'all 0.2s',
-      
-      // 👇 selection logic
-      background: selectedWorld === s
-        ? 'rgba(0,245,255,0.2)'
-        : 'rgba(255,255,255,0.05)',
-
-      border: selectedWorld === s
-        ? '0.5px solid rgba(0,245,255,0.8)'
-        : '0.5px solid rgba(255,255,255,0.1)',
-
-      color: selectedWorld === s
-        ? '#00f5ff'
-        : 'rgba(255,255,255,0.45)'
-    }}
-  >
-    {s}
-  </div>
-))}
+                  {['🏔 Mountain', '🌊 Ocean', '🌅 Sahara'].map((s, i) => (
+                    <div key={i} style={{ padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{s}</div>
+                  ))}
                 </div>
               </div>
               <div style={{ color: 'rgba(0,245,255,0.6)', fontSize: 24 }}>›</div>
