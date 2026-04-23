@@ -22,6 +22,18 @@ export default function LoginPage() {
   }, [])
 
   useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        router.push('/dashboard')
+      }
+    })
+  
+    return () => {
+      listener.subscription.unsubscribe()
+    }
+  }, [router, supabase])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -121,20 +133,30 @@ export default function LoginPage() {
   async function handleSubmit() {
     setLoading(true)
     setError('')
+  
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({
-        email, password, options: { data: { name } }
+        email,
+        password,
+        options: { data: { name } }
       })
-      if (error) setError(error.message)
-      else router.push('/dashboard')
+  
+      if (error) {
+        setError(error.message)
+      }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setError(error.message)
-      else router.push('/dashboard')
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+  
+      if (error) {
+        setError(error.message)
+      }
     }
+  
     setLoading(false)
   }
-
   return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
 
