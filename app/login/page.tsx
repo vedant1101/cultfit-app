@@ -135,16 +135,23 @@ export default function LoginPage() {
     setError('')
   
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { name } }
-      })
-  
-      if (error) {
-        setError(error.message)
-      }
-    } else {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { name } }
+        })
+      
+        if (error) {
+          setError(error.message)
+        } else {
+          // ✅ IMPORTANT FIX
+          if (data.session) {
+            router.push('/dashboard')
+          } else {
+            setError('Check your email to confirm signup')
+          }
+        }
+      } else {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
