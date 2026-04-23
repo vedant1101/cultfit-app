@@ -76,20 +76,59 @@ export default function RunPage() {
   async function stopRun() {
     if (animRef.current) cancelAnimationFrame(animRef.current)
     setRunning(false)
+    
     const earned = Math.round(kmRef.current * 80)
     const { data: { user } } = await supabase.auth.getUser()
+    
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('points,total_km,total_sessions,streak').eq('id', user.id).single()
+      // 1. Fetch current profile
+      const { data: profile } = await supabase.from('profiles')
+        .select('points, total_km, total_sessions, streak, last_run_at')
+        .eq('id', user.id)
+        .single()
+
       if (profile) {
+        const now = new Date()
+        const lastRun = profile.last_run_at ? new Date(profile.last_run_at) : null
+        
+        // --- STREAK LOGIC ---
+        let newStreak = profile.streak || 0
+        if (!lastRun) {
+          newStreak = 1
+        } else {
+          // Reset hours to compare calendar days
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          const prevRunDay = new Date(lastRun.getFullYear(), lastRun.getMonth(), lastRun.getDate())
+          const diffDays = Math.floor((today.getTime() - prevRunDay.getTime()) / (1000 * 60 * 60 * 24))
+
+          if (diffDays === 1) {
+            newStreak += 1 // Next day: increment
+          } else if (diffDays > 1) {
+            newStreak = 1 // Missed days: reset
+          }
+          // if diffDays === 0: do nothing to newStreak
+        }
+
+        // --- SESSION LOGIC ---
+        // We always add 1 here because a run is a run!
+        const updatedSessions = (profile.total_sessions || 0) + 1
+
+        // 2. Update Profile with +1 session and conditional streak
         await supabase.from('profiles').update({
-          points: profile.points + earned,
-          total_km: parseFloat((profile.total_km + kmRef.current).toFixed(2)),
-          total_sessions: profile.total_sessions + 1,
-          streak: profile.streak + 1,
+          points: (profile.points || 0) + earned,
+          total_km: parseFloat(((profile.total_km || 0) + kmRef.current).toFixed(2)),
+          total_sessions: updatedSessions, 
+          streak: newStreak,
+          last_run_at: now.toISOString()
         }).eq('id', user.id)
+
+        // 3. Record the individual session log
         await supabase.from('run_sessions').insert({
-          user_id: user.id, km: parseFloat(kmRef.current.toFixed(2)), points_earned: earned,
-          scene: scenes[selected || 'sahara'].name, duration_seconds: Math.round(kmRef.current * 330),
+          user_id: user.id, 
+          km: parseFloat(kmRef.current.toFixed(2)), 
+          points_earned: earned,
+          scene: scenes[selected || 'sahara'].name, 
+          duration_seconds: Math.round(kmRef.current * 330),
         })
       }
     }
