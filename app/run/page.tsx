@@ -80,71 +80,60 @@ export default function RunPage() {
     const finalKm = kmRef.current
     const earned = Math.round(finalKm * 80)
     
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("No authenticated user found")
+    console.log("Stopping run... KM:", finalKm, "Points to add:", earned)
   
-      // 1. Fetch current profile
-      const { data: profile, error: fetchError } = await supabase
+    // 1. Get User Session again to be 100% sure we are connected
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
+  
+    if (!user) {
+      console.error("No active session found during stopRun")
+      return router.push('/login')
+    }
+  
+    // 2. Direct Update (Avoids the "Fetch-then-Update" race condition)
+    // This uses Supabase's increment logic so we don't need to fetch first
+    const { error: updateError } = await supabase.rpc('increment_stats', {
+      user_id: user.id,
+      add_points: earned,
+      add_km: finalKm,
+      add_session: 1
+    })
+  
+    // IF YOU DON'T HAVE AN RPC SETUP, USE THIS INSTEAD:
+    if (updateError) {
+      console.log("RPC not found, falling back to standard update...")
+      
+      // First, get current values
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('points, total_km, total_sessions, streak, last_run_at')
+        .select('points, total_sessions, total_km')
         .eq('id', user.id)
         .single()
   
-      if (fetchError) throw fetchError
-  
-      // --- STREAK & SESSION LOGIC ---
-      const now = new Date()
-      const lastRun = profile.last_run_at ? new Date(profile.last_run_at) : null
-      let newStreak = profile.streak || 0
-      
-      if (!lastRun) {
-        newStreak = 1
-      } else {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const prevDay = new Date(lastRun.getFullYear(), lastRun.getMonth(), lastRun.getDate())
-        const diffDays = Math.floor((today.getTime() - prevDay.getTime()) / (1000 * 60 * 60 * 24))
-  
-        if (diffDays === 1) newStreak += 1
-        else if (diffDays > 1) newStreak = 1
-      }
-  
-      const updatedSessions = (profile.total_sessions || 0) + 1
-  
-      // 2. Perform the Update
-      const { error: updateError } = await supabase
+      const { error: fallbackError } = await supabase
         .from('profiles')
         .update({
-          points: (profile.points || 0) + earned,
-          total_km: parseFloat(((profile.total_km || 0) + finalKm).toFixed(2)),
-          total_sessions: updatedSessions, // This is the increment
-          streak: newStreak,
-          last_run_at: now.toISOString()
+          points: (profile?.points || 0) + earned,
+          total_sessions: (profile?.total_sessions || 0) + 1,
+          total_km: parseFloat(((profile?.total_km || 0) + finalKm).toFixed(2)),
+          last_run_at: new Date().toISOString()
         })
         .eq('id', user.id)
   
-      if (updateError) throw updateError
-  
-      // 3. Record individual session log
-      const { error: logError } = await supabase.from('run_sessions').insert({
-        user_id: user.id, 
-        km: parseFloat(finalKm.toFixed(2)), 
-        points_earned: earned,
-        scene: scenes[selected || 'sahara'].name, 
-        duration_seconds: Math.round(finalKm * 330),
-      })
-  
-      if (logError) throw logError
-  
-      // 4. ONLY NOW redirect
-      console.log("Sync Complete. Sessions Updated to:", updatedSessions)
-      router.push('/dashboard')
-  
-    } catch (err) {
-      console.error("Database Update Failed:", err)
-      // If it fails, we still want to go back, but we'll know why
-      router.push('/dashboard')
+      if (fallbackError) console.error("Update failed:", fallbackError.message)
     }
+  
+    // 3. Log the session history
+    await supabase.from('run_sessions').insert({
+      user_id: user.id,
+      km: parseFloat(finalKm.toFixed(2)),
+      points_earned: earned,
+      scene: scenes[selected || 'sahara'].name
+    })
+  
+    console.log("Database update sequence finished.")
+    router.push('/dashboard')
   }
 
   const drawAsset = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, type: string, world: WorldConfig) => {

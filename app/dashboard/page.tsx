@@ -168,7 +168,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>+80 pts per km · 3 immersive worlds</div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                  {['🏔 Mountain', '🌊 Ocean', '🌅 Sahara'].map((s, i) => (
+                  {['🌅 Sahara','🌊 Ocean'].map((s, i) => (
                     <div key={i} style={{ padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{s}</div>
                   ))}
                 </div>
